@@ -7,17 +7,12 @@ DOMAINS_FILE="./domains.list"
 CONF_DIR="./data/conf"
 CERTS_DIR="./data/certs"
 LOG_DIR="./logs/nginx"
-WEBROOT_DIR="./data/webroot"
+WEBROOT_DIR="./webroot"
 
 # -----------------------------
 # Create required directories
 # -----------------------------
-mkdir -p "$CONF_DIR" "$CERTS_DIR" "$LOG_DIR" "$WEBROOT_DIR"
-
-# -----------------------------
-# Email for Let's Encrypt
-# -----------------------------
-EMAIL="micromodern.ah@gmail.com"
+mkdir -p "$CONF_DIR" "$LOG_DIR" "$WEBROOT_DIR"
 
 # -----------------------------
 # Read domains into array
@@ -34,14 +29,14 @@ for f in "$CONF_DIR"/auto_*.conf; do
     DOMAIN=${DOMAIN%.conf}
 
     if [[ ! " ${DOMAINS_LIST[@]%% *} " =~ " $DOMAIN " ]]; then
-        echo "Config $DOMAIN not in list, removing."
+        echo "Config $DOMAIN is not in list, removing."
         rm -f "$f"
         rm -f "$LOG_DIR/$DOMAIN.access.log" "$LOG_DIR/$DOMAIN.error.log"
     fi
 done
 
 # -----------------------------
-# Create/update configs and SSL
+# Create/update configs and renewal
 # -----------------------------
 while read -r line; do
     DOMAIN=$(echo $line | awk '{print $1}')
@@ -60,41 +55,26 @@ while read -r line; do
 
     return 301 https://\$host\$request_uri;
 }"
+
     echo "$NEW_HTTP_CONF" > "$CONF_FILE"
     echo "HTTP config for $DOMAIN created/updated."
 
     # -----------------------------
-    # Issue or renew SSL with webroot
+    # Renewal (webroot)
     # -----------------------------
-    if [[ ! -d "$CERTS_DIR/live/$DOMAIN" ]]; then
-        docker run -it --rm \
-            -v "$CERTS_DIR:/etc/letsencrypt" \
-            -v "$WEBROOT_DIR:/var/www/html" \
-            certbot/certbot certonly \
-            --webroot -w /var/www/html \
-            --non-interactive \
-            --agree-tos \
-            --email "$EMAIL" \
-            -d "$DOMAIN"
-        echo "SSL certificate for $DOMAIN issued."
-    else
-        docker run -it --rm \
-            -v "$CERTS_DIR:/etc/letsencrypt" \
-            -v "$WEBROOT_DIR:/var/www/html" \
-            certbot/certbot renew --webroot -w /var/www/html --non-interactive
-        echo "SSL certificate for $DOMAIN checked/renewed."
-    fi
+    docker run -it --rm \
+      -v "$PWD/data/certs:/etc/letsencrypt" \
+      -v "$PWD/webroot:/var/www/html" \
+      certbot/certbot renew --webroot -w /var/www/html --non-interactive
+    echo "SSL certificates checked/renewed for $DOMAIN."
 
     # -----------------------------
     # HTTPS config with proxy
     # -----------------------------
     NEW_HTTPS_CONF="server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name $DOMAIN;
-
-    # enable http2
-    http2 on;
 
     ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
