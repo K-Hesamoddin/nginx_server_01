@@ -7,7 +7,7 @@ DOMAINS_FILE="./domains.list"
 CONF_DIR="./data/conf"
 CERTS_DIR="./data/certs"
 LOG_DIR="./logs/nginx"
-WEBROOT_DIR="./webroot"
+WEBROOT_DIR="./data/webroot"
 
 # -----------------------------
 # Create required directories
@@ -34,7 +34,7 @@ for f in "$CONF_DIR"/auto_*.conf; do
     DOMAIN=${DOMAIN%.conf}
 
     if [[ ! " ${DOMAINS_LIST[@]%% *} " =~ " $DOMAIN " ]]; then
-        echo "Config $DOMAIN is not in list, removing."
+        echo "Config $DOMAIN not in list, removing."
         rm -f "$f"
         rm -f "$LOG_DIR/$DOMAIN.access.log" "$LOG_DIR/$DOMAIN.error.log"
     fi
@@ -60,12 +60,8 @@ while read -r line; do
 
     return 301 https://\$host\$request_uri;
 }"
-    if [[ ! -f "$CONF_FILE" || "$(head -n 20 "$CONF_FILE")" != "$NEW_HTTP_CONF" ]]; then
-        echo "$NEW_HTTP_CONF" > "$CONF_FILE"
-        echo "HTTP config for $DOMAIN created/updated."
-    else
-        echo "HTTP config for $DOMAIN unchanged."
-    fi
+    echo "$NEW_HTTP_CONF" > "$CONF_FILE"
+    echo "HTTP config for $DOMAIN created/updated."
 
     # -----------------------------
     # Issue or renew SSL with webroot
@@ -73,7 +69,7 @@ while read -r line; do
     if [[ ! -d "$CERTS_DIR/live/$DOMAIN" ]]; then
         docker run -it --rm \
             -v "$CERTS_DIR:/etc/letsencrypt" \
-            -v "$PWD/webroot:/var/www/html" \
+            -v "$WEBROOT_DIR:/var/www/html" \
             certbot/certbot certonly \
             --webroot -w /var/www/html \
             --non-interactive \
@@ -84,7 +80,7 @@ while read -r line; do
     else
         docker run -it --rm \
             -v "$CERTS_DIR:/etc/letsencrypt" \
-            -v "$PWD/webroot:/var/www/html" \
+            -v "$WEBROOT_DIR:/var/www/html" \
             certbot/certbot renew --webroot -w /var/www/html --non-interactive
         echo "SSL certificate for $DOMAIN checked/renewed."
     fi
@@ -126,12 +122,8 @@ while read -r line; do
     }
 }"
 
-    if ! grep -q "listen 443 ssl http2;" "$CONF_FILE"; then
-        echo -e "\n$NEW_HTTPS_CONF" >> "$CONF_FILE"
-        echo "HTTPS config for $DOMAIN added."
-    else
-        echo "HTTPS config for $DOMAIN already exists."
-    fi
+    echo -e "\n$NEW_HTTPS_CONF" >> "$CONF_FILE"
+    echo "HTTPS config for $DOMAIN added."
 
 done < "$DOMAINS_FILE"
 

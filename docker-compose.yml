@@ -6,7 +6,7 @@ services:
     container_name: certbot
     volumes:
       - ./data/certs:/etc/letsencrypt
-      - ./webroot:/var/www/html
+      - ./data/webroot:/var/www/html
     entrypoint: /bin/sh -c
     command: |
       "while true; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/html; done"
@@ -22,6 +22,6 @@ services:
     volumes:
       - ./data/conf:/etc/nginx/conf.d:ro
       - ./data/certs:/etc/letsencrypt:ro
-      - ./webroot:/var/www/html:ro
+      - ./data/webroot:/var/www/html:ro
       - ./logs/nginx:/var/log/nginx
     restart: unless-stopped
