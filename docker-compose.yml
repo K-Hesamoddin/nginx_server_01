@@ -1,23 +1,27 @@
-version: '3.9'
+version: "3.9"
 
 services:
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./data/certs:/etc/letsencrypt
+      - ./webroot:/var/www/html
+    entrypoint: /bin/sh -c
+    command: |
+      "while true; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/html; done"
+
   nginx:
-    image: nginx:latest
+    image: nginx:stable
     container_name: nginx-server
+    depends_on:
+      - certbot
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      # فایل‌های کانفیگ داینامیک (توسط اسکریپت ساخته می‌شوند)
       - ./data/conf:/etc/nginx/conf.d:ro
-
-      # پوشه HTML برای صفحه 404 یا صفحات استاتیک
-      - ./data/html:/usr/share/nginx/html:ro
-
-      # گواهی‌های SSL
-      - ./data/certs:/etc/letsencrypt
-
-      # لاگ‌ها
+      - ./data/certs:/etc/letsencrypt:ro
+      - ./webroot:/var/www/html:ro
       - ./logs/nginx:/var/log/nginx
-
     restart: unless-stopped

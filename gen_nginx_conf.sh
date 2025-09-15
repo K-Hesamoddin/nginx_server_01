@@ -1,19 +1,31 @@
 #!/bin/bash
 
+# -----------------------------
+# Paths
+# -----------------------------
 DOMAINS_FILE="./domains.list"
 CONF_DIR="./data/conf"
 CERTS_DIR="./data/certs"
 LOG_DIR="./logs/nginx"
+WEBROOT_DIR="./webroot"
 
-mkdir -p "$CONF_DIR" "$CERTS_DIR" "$LOG_DIR"
+# -----------------------------
+# Create required directories
+# -----------------------------
+mkdir -p "$CONF_DIR" "$CERTS_DIR" "$LOG_DIR" "$WEBROOT_DIR"
 
-EMAIL="micromodern.ah@gmail.com"  # Your real email
+# -----------------------------
+# Email for Let's Encrypt
+# -----------------------------
+EMAIL="micromodern.ah@gmail.com"
 
-# Read domains into an array
+# -----------------------------
+# Read domains into array
+# -----------------------------
 mapfile -t DOMAINS_LIST < "$DOMAINS_FILE"
 
 # -----------------------------
-# Remove auto_ configs not in domains.list
+# Remove old configs not in domains.list
 # -----------------------------
 for f in "$CONF_DIR"/auto_*.conf; do
     [[ -e "$f" ]] || continue
@@ -22,14 +34,14 @@ for f in "$CONF_DIR"/auto_*.conf; do
     DOMAIN=${DOMAIN%.conf}
 
     if [[ ! " ${DOMAINS_LIST[@]%% *} " =~ " $DOMAIN " ]]; then
-        echo "Config for $DOMAIN not in list, removing."
+        echo "Config $DOMAIN is not in list, removing."
         rm -f "$f"
         rm -f "$LOG_DIR/$DOMAIN.access.log" "$LOG_DIR/$DOMAIN.error.log"
     fi
 done
 
 # -----------------------------
-# Create or update configs and SSL
+# Create/update configs and SSL
 # -----------------------------
 while read -r line; do
     DOMAIN=$(echo $line | awk '{print $1}')
@@ -38,7 +50,9 @@ while read -r line; do
     ACCESS_LOG="$LOG_DIR/$DOMAIN.access.log"
     ERROR_LOG="$LOG_DIR/$DOMAIN.error.log"
 
+    # -----------------------------
     # HTTP -> HTTPS redirect
+    # -----------------------------
     NEW_HTTP_CONF="server {
     listen 80;
     listen [::]:80;
@@ -50,34 +64,40 @@ while read -r line; do
         echo "$NEW_HTTP_CONF" > "$CONF_FILE"
         echo "HTTP config for $DOMAIN created/updated."
     else
-        echo "HTTP config for $DOMAIN unchanged, skipped."
+        echo "HTTP config for $DOMAIN unchanged."
     fi
 
-    # Issue or renew SSL with certbot
+    # -----------------------------
+    # Issue or renew SSL with webroot
+    # -----------------------------
     if [[ ! -d "$CERTS_DIR/live/$DOMAIN" ]]; then
-        docker run --rm \
+        docker run -it --rm \
             -v "$CERTS_DIR:/etc/letsencrypt" \
-            -v "$CONF_DIR:/var/www/html" \
+            -v "$PWD/webroot:/var/www/html" \
             certbot/certbot certonly \
-            --standalone \
+            --webroot -w /var/www/html \
             --non-interactive \
             --agree-tos \
             --email "$EMAIL" \
             -d "$DOMAIN"
         echo "SSL certificate for $DOMAIN issued."
     else
-        docker run --rm \
+        docker run -it --rm \
             -v "$CERTS_DIR:/etc/letsencrypt" \
-            certbot/certbot renew --non-interactive
-        echo "SSL certificate for $DOMAIN checked/renewed if needed."
+            -v "$PWD/webroot:/var/www/html" \
+            certbot/certbot renew --webroot -w /var/www/html --non-interactive
+        echo "SSL certificate for $DOMAIN checked/renewed."
     fi
 
-    # HTTPS config with proxy and custom logs (http2 split)
+    # -----------------------------
+    # HTTPS config with proxy
+    # -----------------------------
     NEW_HTTPS_CONF="server {
     listen 443 ssl;
     listen [::]:443 ssl;
     server_name $DOMAIN;
 
+    # enable http2
     http2 on;
 
     ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
@@ -106,11 +126,11 @@ while read -r line; do
     }
 }"
 
-    if ! grep -q "listen 443 ssl;" "$CONF_FILE"; then
+    if ! grep -q "listen 443 ssl http2;" "$CONF_FILE"; then
         echo -e "\n$NEW_HTTPS_CONF" >> "$CONF_FILE"
         echo "HTTPS config for $DOMAIN added."
     else
-        echo "HTTPS config for $DOMAIN already exists, skipped."
+        echo "HTTPS config for $DOMAIN already exists."
     fi
 
 done < "$DOMAINS_FILE"
