@@ -28,3 +28,6 @@ Thumbs.db
 *.cache
 *.pyc
 __pycache__/
+
+# Auto-generated domains list
+domains.list
