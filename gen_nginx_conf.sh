@@ -7,13 +7,13 @@ LOG_DIR="./logs/nginx"
 
 mkdir -p "$CONF_DIR" "$CERTS_DIR" "$LOG_DIR"
 
-EMAIL="micromodern.ah@gmail.com"  # ایمیل واقعی خودت
+EMAIL="micromodern.ah@gmail.com"  # Your real email
 
-# خواندن لیست دامنه‌ها به آرایه
+# Read domains into an array
 mapfile -t DOMAINS_LIST < "$DOMAINS_FILE"
 
 # -----------------------------
-# حذف کانفیگ‌های auto_ که در domains.list نیستند
+# Remove auto_ configs not in domains.list
 # -----------------------------
 for f in "$CONF_DIR"/auto_*.conf; do
     [[ -e "$f" ]] || continue
@@ -22,15 +22,14 @@ for f in "$CONF_DIR"/auto_*.conf; do
     DOMAIN=${DOMAIN%.conf}
 
     if [[ ! " ${DOMAINS_LIST[@]%% *} " =~ " $DOMAIN " ]]; then
-        echo "کانفیگ $DOMAIN در لیست نیست، حذف می‌شود."
+        echo "Config for $DOMAIN not in list, removing."
         rm -f "$f"
-        # می‌توان فایل‌های لاگ مربوطه را هم حذف کرد (اختیاری)
         rm -f "$LOG_DIR/$DOMAIN.access.log" "$LOG_DIR/$DOMAIN.error.log"
     fi
 done
 
 # -----------------------------
-# ساخت یا به‌روزسانی کانفیگ‌ها و SSL
+# Create or update configs and SSL
 # -----------------------------
 while read -r line; do
     DOMAIN=$(echo $line | awk '{print $1}')
@@ -39,7 +38,7 @@ while read -r line; do
     ACCESS_LOG="$LOG_DIR/$DOMAIN.access.log"
     ERROR_LOG="$LOG_DIR/$DOMAIN.error.log"
 
-    # کانفیگ HTTP -> HTTPS
+    # HTTP -> HTTPS redirect
     NEW_HTTP_CONF="server {
     listen 80;
     listen [::]:80;
@@ -49,14 +48,14 @@ while read -r line; do
 }"
     if [[ ! -f "$CONF_FILE" || "$(head -n 20 "$CONF_FILE")" != "$NEW_HTTP_CONF" ]]; then
         echo "$NEW_HTTP_CONF" > "$CONF_FILE"
-        echo "کانفیگ HTTP برای $DOMAIN ساخته شد/به‌روز شد."
+        echo "HTTP config for $DOMAIN created/updated."
     else
-        echo "کانفیگ HTTP برای $DOMAIN تغییر نکرد، نادیده گرفته شد."
+        echo "HTTP config for $DOMAIN unchanged, skipped."
     fi
 
-    # صدور یا تمدید SSL با certbot
+    # Issue or renew SSL with certbot
     if [[ ! -d "$CERTS_DIR/live/$DOMAIN" ]]; then
-        docker run -it --rm \
+        docker run --rm \
             -v "$CERTS_DIR:/etc/letsencrypt" \
             -v "$CONF_DIR:/var/www/html" \
             certbot/certbot certonly \
@@ -65,18 +64,19 @@ while read -r line; do
             --agree-tos \
             --email "$EMAIL" \
             -d "$DOMAIN"
-        echo "گواهی SSL برای $DOMAIN صادر شد."
+        echo "SSL certificate for $DOMAIN issued."
     else
-        docker run -it --rm \
+        docker run --rm \
             -v "$CERTS_DIR:/etc/letsencrypt" \
             certbot/certbot renew --non-interactive
-        echo "گواهی SSL برای $DOMAIN بررسی و در صورت نیاز تمدید شد."
+        echo "SSL certificate for $DOMAIN checked/renewed if needed."
     fi
 
-    # کانفیگ HTTPS با پراکسی کامل و فایل لاگ اختصاصی
+    # HTTPS config with proxy and custom logs (http2 split)
     NEW_HTTPS_CONF="server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2;
     server_name $DOMAIN;
 
     ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
@@ -105,13 +105,13 @@ while read -r line; do
     }
 }"
 
-    if ! grep -q "listen 443 ssl http2;" "$CONF_FILE"; then
+    if ! grep -q "listen 443 ssl;" "$CONF_FILE"; then
         echo -e "\n$NEW_HTTPS_CONF" >> "$CONF_FILE"
-        echo "کانفیگ HTTPS برای $DOMAIN اضافه شد."
+        echo "HTTPS config for $DOMAIN added."
     else
-        echo "کانفیگ HTTPS برای $DOMAIN قبلاً موجود است، نادیده گرفته شد."
+        echo "HTTPS config for $DOMAIN already exists, skipped."
     fi
 
 done < "$DOMAINS_FILE"
 
-echo "کانفیگ Nginx و SSL برای تمام دامنه‌ها بررسی و به‌روز شد."
+echo "All Nginx configs and SSL certificates checked and updated."
