@@ -15,7 +15,7 @@ services:
       - ./data/html:/usr/share/nginx/html:ro
 
       # گواهی‌های SSL
-      - ./data/certs:/etc/letsencrypt:ro
+      - ./data/certs:/etc/letsencrypt
 
       # لاگ‌ها
       - ./logs/nginx:/var/log/nginx
