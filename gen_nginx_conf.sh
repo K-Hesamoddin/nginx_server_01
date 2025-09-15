@@ -76,8 +76,9 @@ while read -r line; do
     NEW_HTTPS_CONF="server {
     listen 443 ssl;
     listen [::]:443 ssl;
-    http2;
     server_name $DOMAIN;
+
+    http2 on;
 
     ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
