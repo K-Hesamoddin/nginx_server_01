@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx-server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # فایل‌های کانفیگ داینامیک (توسط اسکریپت ساخته می‌شوند)
+      - ./data/conf:/etc/nginx/conf.d:ro
+
+      # پوشه HTML برای صفحه 404 یا صفحات استاتیک
+      - ./data/html:/usr/share/nginx/html:ro
+
+      # گواهی‌های SSL
+      - ./data/certs:/etc/letsencrypt:ro
+
+      # لاگ‌ها
+      - ./logs/nginx:/var/log/nginx
+
+    restart: unless-stopped

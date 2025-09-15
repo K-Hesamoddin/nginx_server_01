@@ -1,0 +1,30 @@
+# فولدر لاگ‌ها
+logs/
+*.log
+
+# فولدر گواهی‌ها (Let's Encrypt)
+data/certs/
+
+# فایل‌های کانفیگ داینامیک (توسط اسکریپت ساخته می‌شوند)
+data/conf/auto_*.conf
+
+# پوشه‌های موقت Docker
+*.pid
+*.sock
+*.swp
+*.bak
+*.tmp
+
+# فایل‌های سیستم‌عامل
+.DS_Store
+Thumbs.db
+
+# محیط‌های محلی یا IDE
+.vscode/
+.idea/
+*.iml
+
+# فایل‌های کش
+*.cache
+*.pyc
+__pycache__/
